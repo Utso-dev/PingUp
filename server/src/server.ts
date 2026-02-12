@@ -22,7 +22,7 @@ io.on("connection", (socket) => {
   console.log("A user connected: " + socket.id);
 
   socket.on("join_room", (room) => {
-    console.log("Message: " + room);
+    console.log("join_room:" + room + " by user: " + socket.id);
     socket.join(room);
   });
   socket.on("send_message", (data) => {

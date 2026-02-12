@@ -31,7 +31,7 @@ io.on("connection", (socket) => {
   });
   socket.on("typing", ({ username, room }) => {
     console.log("typing: " + username + " in room: " + room);
-    socket.to(room).emit("typing", { username, room });
+    socket.to(room).emit("typing_message", { username, room });
   });
 
   socket.on("disconnect", () => {

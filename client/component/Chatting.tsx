@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { LuSendHorizontal } from "react-icons/lu";
+import { io } from "socket.io-client";
 
+const socket = io("http://localhost:4000");
 function Chatting({
   userName,
   roomName,
@@ -8,32 +10,61 @@ function Chatting({
   userName: string;
   roomName: string;
 }) {
-  const [messages, setMessages] = useState([
-    {
-      id: 1,
-      username: "Alice",
-      content: "Hello everyone!",
-    },
-    {
-      id: 2,
-      username: "Bob",
-      content: "Hi Alice! How are you?",
-    },
-  ]);
+  const [messages, setMessages] = useState(
+    [] as Array<{
+      id: number;
+      username: string;
+      content: string;
+    }>,
+  );
+  const [typingUsers, setTypingUsers] = useState("");
+  const [isTyping, setIsTyping] = useState("");
+  socket.on("connect", () => {
+    console.log("Connected to server with ID: " + socket.id);
+  });
+  useEffect(() => {
+    socket.emit("join_room", roomName);
+    
+    socket.on("receive_message", (data) => {
+      setMessages((prevMessages) => [...prevMessages, data]);
+    });
+
+    socket.on("typing_message", (user) => {
+      setTypingUsers(user.username);
+      setIsTyping(`${user.username} is typing...`);
+      setTimeout(() => {
+        setTypingUsers("");
+        setIsTyping("");
+      }, 2000);
+    });
+
+    return () => {
+      socket.off("receive_message");
+      socket.off("connect");
+      socket.off("join_room");
+      socket.off("typing_message");
+    };
+  }, [roomName]);
   const [newMessage, setNewMessage] = useState("");
   const sendMessage = () => {
     // Logic to send message to the server
     const message = {
-      id: messages.length + 1,
+      id: Date.now(),
+      room: roomName,
       username: userName,
       content: newMessage,
     };
-    setMessages([...messages, message]);
+    socket.emit("send_message", message);
+    setMessages((prevMessages) => [...prevMessages, message]);
     setNewMessage("");
   };
+  const handleTyping = () => {
+    socket.emit("typing", { username: userName, room: roomName });
+  };
+
   return (
     <div className="border max-w-7xl! w-full border-green-300 p-6">
-      <h1 className="text-2xl text-center font-bold">
+      <h1 className="text-2xl text-center dark:text-white font-bold">
         Welcome <span className="text-green-500 capitalize">{userName}</span> to
         the room <span className="text-green-500">{roomName}</span>
       </h1>
@@ -48,14 +79,20 @@ function Chatting({
                 {message.username.charAt(0)}
               </div>
             )}
+
             <div
               className={
                 message.username === userName ? "text-right" : "text-left"
               }
             >
-              <p className="text-sm text-gray-500">{message.username === userName ? "You" : message.username}</p>
-              <p className="text-gray-800">{message.content}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {message.username === userName ? "You" : message.username}
+              </p>
+              <p className="text-gray-800 dark:text-gray-200">
+                {message.content}
+              </p>
             </div>
+
             {message.username === userName && (
               <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center text-white font-bold">
                 {message.username.charAt(0)}
@@ -63,6 +100,17 @@ function Chatting({
             )}
           </div>
         ))}
+
+        {typingUsers && typingUsers !== userName && (
+          <p className="text-sm text-red-700 dark:text-gray-400">
+            <div className="flex items-center gap-2">
+              <p className="w-8 h-8 rounded-full  bg-green-500 text-center leading-8.5 text-white font-bold">
+                {typingUsers.charAt(0).toUpperCase()}
+              </p>
+              <span>{isTyping}</span>
+            </div>
+          </p>
+        )}
       </div>
       <div className="flex gap-2 items-stretch">
         <input
@@ -70,7 +118,10 @@ function Chatting({
           className="border border-green-300 rounded w-full h-12 px-3 focus:outline-none focus:ring-2 focus:ring-green-400"
           placeholder="Type your message..."
           value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
+          onChange={(e) => {
+            setNewMessage(e.target.value);
+            handleTyping();
+          }}
         />
         <button
           onClick={sendMessage}
